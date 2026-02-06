@@ -67,23 +67,23 @@ router.get("/report", async (req, res) => {
       "habitat",
       "sarus_coun AS sarus_count"
     ];
-    
-    if (config.hasDistrict) columns.unshift("district");
-    
-    if (config.hasSite) columns.push("site");
-    
-    if (config.hasRangeFO) columns.push("range_fore");
-    
-    if (config.hasColony) columns.push("name_of_co");
-    
-    if (config.hasAdults) columns.push("adults");
-    
-    if (config.hasJuvenile) columns.push("juvenile");
-    
-    if (config.hasNests) columns.push("nests");
-    
 
-   
+    if (config.hasDistrict) columns.unshift("district");
+
+    if (config.hasSite) columns.push("site");
+
+    if (config.hasRangeFO) columns.push("range_fore");
+
+    if (config.hasColony) columns.push("name_of_co");
+
+    if (config.hasAdults) columns.push("adults");
+
+    if (config.hasJuvenile) columns.push("juvenile");
+
+    if (config.hasNests) columns.push("nests");
+
+
+
 
     /* ---------- TABLE DATA ---------- */
 
@@ -114,17 +114,34 @@ router.get("/report", async (req, res) => {
 
     /* ---------- DISTRICT CHART ---------- */
 
-    let districtChart = [];
+    /* ---------- DISTRICT CHART (All Districts View) ---------- */
 
-    if (config.hasDistrict) {
-      const q = `
-        SELECT district, SUM(sarus_coun) AS sarus_count
-        FROM ${TABLE}
-        GROUP BY district
-        ORDER BY sarus_count DESC
-      `;
-      districtChart = (await pool.query(q)).rows;
-    }
+let districtChart = [];
+let siteChart = [];
+
+// When NO district selected → show district-wise chart
+if (!district && config.hasDistrict) {
+  const q = `
+    SELECT district, SUM(sarus_coun) AS sarus_count
+    FROM ${TABLE}
+    GROUP BY district
+    ORDER BY district
+  `;
+  districtChart = (await pool.query(q)).rows;
+}
+
+// When district selected → show site-wise chart
+if (district && config.hasSite) {
+  const q = `
+    SELECT site, SUM(sarus_coun) AS sarus_count
+    FROM ${TABLE}
+    WHERE district = $1
+    GROUP BY site
+    ORDER BY site
+  `;
+  siteChart = (await pool.query(q, [district])).rows;
+}
+
 
     /* ---------- HABITAT CHART ---------- */
 
@@ -145,11 +162,11 @@ router.get("/report", async (req, res) => {
 
     const population = popParts.length
       ? (
-          await pool.query(`
+        await pool.query(`
             SELECT ${popParts.join(", ")}
             FROM ${TABLE}
           `)
-        ).rows[0]
+      ).rows[0]
       : {};
 
     /* ---------- RESPONSE ---------- */
@@ -159,10 +176,12 @@ router.get("/report", async (req, res) => {
       total: Number(total.rows[0].sarus_count),
       charts: {
         district: districtChart,
+        site: siteChart,
         habitat: habitatChart,
         population
       }
     });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -197,23 +216,23 @@ router.get("/export", async (req, res) => {
       "latitude",
       "longitude"
     ];
-    
-    if (config.hasDistrict) cols.unshift("district");
-    
-    if (config.hasSite) cols.push("site");
-    
-    if (config.hasRangeFO) cols.push("range_fore");
-    
-    if (config.hasColony) cols.push("name_of_co");
-    
-    if (config.hasAdults) cols.push("adults");
-    
-    if (config.hasJuvenile) cols.push("juvenile");
-    
-    if (config.hasNests) cols.push("nests");
-    
 
-    
+    if (config.hasDistrict) cols.unshift("district");
+
+    if (config.hasSite) cols.push("site");
+
+    if (config.hasRangeFO) cols.push("range_fore");
+
+    if (config.hasColony) cols.push("name_of_co");
+
+    if (config.hasAdults) cols.push("adults");
+
+    if (config.hasJuvenile) cols.push("juvenile");
+
+    if (config.hasNests) cols.push("nests");
+
+
+
     const q = `
       SELECT ${cols.join(", ")}
       FROM ${TABLE}
