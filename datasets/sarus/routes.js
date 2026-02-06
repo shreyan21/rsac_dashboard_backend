@@ -101,6 +101,18 @@ router.get("/report", async (req, res) => {
       per_page,
       (page - 1) * per_page
     ]);
+    /* ---------- TOTAL ROW COUNT (for pagination only) ---------- */
+    const countQuery = `
+    SELECT COUNT(*) AS total_rows
+    FROM ${TABLE}
+    ${where}
+  `;
+  
+  const countResult = await pool.query(countQuery, params);
+  
+
+
+
 
     /* ---------- TOTAL SARUS ---------- */
 
@@ -173,7 +185,8 @@ if (district && config.hasSite) {
 
     res.json({
       rows: rows.rows,
-      total: Number(total.rows[0].sarus_count),
+      totalRows: Number(countResult.rows[0].total_rows), // ← for pagination
+      total: Number(total.rows[0].sarus_count),          // ← for display
       charts: {
         district: districtChart,
         site: siteChart,
@@ -181,6 +194,8 @@ if (district && config.hasSite) {
         population
       }
     });
+    
+    
 
   } catch (err) {
     console.error(err);
