@@ -53,7 +53,8 @@ async function queryData(table, district, page, perPage) {
     // Special handling ONLY for sarus_2_09_2020 Raebareli
     if (
       table === "uprsac_09xxxx_sarusfirst_13072023" &&
-      district.toLowerCase() === "raebareli"
+      String(district).toLowerCase()
+ === "raebareli"
     ) {
   
       sql += `
@@ -64,7 +65,8 @@ async function queryData(table, district, page, perPage) {
     }
   
     // Normal Raebareli merge for other sarus tables
-    else if (district.toLowerCase() === "raebareli") {
+    else if (String(district).toLowerCase()
+ === "raebareli") {
   
       sql += `
         WHERE LOWER(REPLACE(district,' ','')) IN ('raebareli','raibareli','raebarely')
@@ -107,12 +109,19 @@ router.get("/districts", async (req, res) => {
       return res.json([]);
     }
 
-    const q = `
-      SELECT DISTINCT district
-      FROM ${TABLE}
-      WHERE district IS NOT NULL
-      ORDER BY district
-    `;
+const q= `SELECT 
+  INITCAP(
+    CASE 
+      WHEN LOWER(REPLACE(district,' ','')) IN 
+        ('raebareli','raibareli','raebarely')
+      THEN 'raebareli'
+      ELSE district
+    END
+  ) AS district
+FROM ${TABLE}
+GROUP BY 1
+ORDER BY 1`
+
 
     const r = await pool.query(q);
     res.json(r.rows.map(r => r.district));
@@ -136,13 +145,32 @@ router.get("/report", async (req, res) => {
 
     /* ---------- WHERE CLAUSE ---------- */
 
-  let where = "";
+/* ---------- WHERE CLAUSE ---------- */
+
+let where = "";
 let filterParams = [];
 
 if (district && config.hasDistrict) {
-  where = "WHERE district = $1";
-  filterParams.push(district);
+
+  const districtStr = String(district).trim();
+
+  if (districtStr.toLowerCase() === "raebareli") {
+    where = `
+      WHERE LOWER(REPLACE(district,' ','')) 
+      IN ('raebareli','raibareli','raebarely')
+    `;
+  } else {
+    where = `
+      WHERE LOWER(district) = LOWER($1)
+    `;
+    filterParams.push(districtStr);
+  }
 }
+
+
+
+
+
 
     /* ---------- BUILD COLUMN LIST ---------- */
 
@@ -182,7 +210,7 @@ let dataQuery = `
 
 let dataParams = [...filterParams];
 
-if (page && per_page) {
+if (Number(page) > 0 && Number(per_page) > 0) {
   dataQuery += `
     LIMIT $${dataParams.length + 1}
     OFFSET $${dataParams.length + 2}
@@ -231,25 +259,58 @@ let siteChart = [];
 // When NO district selected → show district-wise chart
 if (!district && config.hasDistrict) {
   const q = `
-    SELECT district, SUM(sarus_coun) AS sarus_count
+    SELECT 
+      CASE
+        WHEN LOWER(REPLACE(district,' ','')) 
+             IN ('raebareli','raibareli','raebarely')
+        THEN 'Raebareli'
+        ELSE district
+      END AS district,
+      SUM(sarus_coun) AS sarus_count
     FROM ${TABLE}
-    GROUP BY district
+    GROUP BY 
+      CASE
+        WHEN LOWER(REPLACE(district,' ','')) 
+             IN ('raebareli','raibareli','raebarely')
+        THEN 'Raebareli'
+        ELSE district
+      END
     ORDER BY district
   `;
+
   districtChart = (await pool.query(q)).rows;
 }
 
+
 // When district selected → show site-wise chart
 if (district && config.hasSite) {
+
+  const districtStr = String(district).trim();   // 🔐 force string safely
+
+  let siteWhere = "";
+  let siteParams = [];
+
+  if (districtStr.toLowerCase() === "raebareli") {
+    siteWhere = `
+      WHERE LOWER(REPLACE(district,' ','')) 
+      IN ('raebareli','raibareli','raebarely')
+    `;
+  } else {
+    siteWhere = `WHERE LOWER(district) = LOWER($1)`;
+    siteParams.push(districtStr);
+  }
+
   const q = `
     SELECT site, SUM(sarus_coun) AS sarus_count
     FROM ${TABLE}
-    WHERE district = $1
+    ${siteWhere}
     GROUP BY site
     ORDER BY site
   `;
-  siteChart = (await pool.query(q, [district])).rows;
+
+  siteChart = (await pool.query(q, siteParams)).rows;
 }
+
 
 
     /* ---------- HABITAT CHART ---------- */
@@ -333,7 +394,9 @@ router.all("/export", async (req, res) => {
         if (key === "gid") return;
     
         if (key === "time") {
-          obj.DATE = r[key];
+         const dateValue = new Date(r[key]);
+obj.DATE = dateValue.toLocaleDateString("en-GB");
+
         }
         else if (key === "sarus_coun") {
           obj["SARUS COUNT"] = r[key];
@@ -370,7 +433,10 @@ router.all("/export", async (req, res) => {
 
 
 
-      const parser = new Parser({ fields });
+const parser = new Parser({
+  fields,
+  excelStrings: true
+});
       let csv = parser.parse(transformedRows);
 
       // -------- TITLE --------
