@@ -3,7 +3,6 @@ import { pool } from "../../core/db.js";
 import sarusMap from "./tableMap.js";
 import SCHEMA from "./schema.js";
 
-import ExcelJS from "exceljs";
 import { Parser } from "json2csv";
 import PDFDocument from "pdfkit";
 import path from "path"
@@ -37,7 +36,7 @@ async function buildQueryOptions(tableKey) {
   cols.push("sarus_coun");
   if (!isThird) cols.push("adults");
   else cols.push("adult AS adults");
-  cols.push("juvenile", "nests", "site", "habitat", "threats", "time");
+  cols.push("juvenile", "nests", "habitat", "threats", "time");
 
   cols = await getExistingColumns(TABLE, cols);
   return { TABLE, cols, isLucknow };
@@ -134,7 +133,7 @@ ORDER BY 1`
 
 router.get("/report", async (req, res) => {
   try {
-    const { table, district, page , per_page  } = req.query;
+    const { table, district, page, per_page } = req.query;
 
     const TABLE = sarusMap[table];
     const config = SCHEMA[table];
@@ -143,105 +142,83 @@ router.get("/report", async (req, res) => {
       return res.status(400).json({ error: "Invalid Sarus table" });
     }
 
-    /* ---------- WHERE CLAUSE ---------- */
+    let where = "";
+    let filterParams = [];
 
-/* ---------- WHERE CLAUSE ---------- */
+    if (district && config.hasDistrict) {
+      const districtStr = String(district).trim();
 
-let where = "";
-let filterParams = [];
+      if (districtStr.toLowerCase() === "raebareli") {
+        where = `
+          WHERE LOWER(REPLACE(district,' ','')) 
+          IN ('raebareli','raibareli','raebarely')
+        `;
+      } else {
+        where = `WHERE LOWER(district) = LOWER($1)`;
+        filterParams.push(districtStr);
+      }
+    }
+    let siteChart = [];
 
 if (district && config.hasDistrict) {
-
-  const districtStr = String(district).trim();
-
-  if (districtStr.toLowerCase() === "raebareli") {
-    where = `
-      WHERE LOWER(REPLACE(district,' ','')) 
-      IN ('raebareli','raibareli','raebarely')
-    `;
-  } else {
-    where = `
-      WHERE LOWER(district) = LOWER($1)
-    `;
-    filterParams.push(districtStr);
-  }
-}
-
-
-
-
-
-
-    /* ---------- BUILD COLUMN LIST ---------- */
-
-    const columns = [
-      "gid",
-      "latitude",
-      "longitude",
-      "habitat",
-      "sarus_coun AS sarus_count"
-    ];
-
-    if (config.hasDistrict) columns.unshift("district");
-
-    if (config.hasSite) columns.push("site");
-    if (config.hasThreats) columns.push("threats");
-
-
-    if (config.hasRangeFO) columns.push("range_fore");
-
-    if (config.hasColony) columns.push("name_of_co");
-
-    if (config.hasAdults) columns.push("adults");
-
-    if (config.hasJuvenile) columns.push("juvenile");
-
-    if (config.hasNests) columns.push("nests");
-
-
-
-
-    /* ---------- TABLE DATA ---------- */
-
-let dataQuery = `
-  SELECT ${columns.join(", ")}
-  FROM ${TABLE}
-  ${where}
-  ORDER BY gid
-`;
-
-let dataParams = [...filterParams];
-
-if (Number(page) > 0 && Number(per_page) > 0) {
-  dataQuery += `
-    LIMIT $${dataParams.length + 1}
-    OFFSET $${dataParams.length + 2}
-  `;
-
-  dataParams.push(per_page);
-  dataParams.push((page - 1) * per_page);
-}
-
-const rows = await pool.query(dataQuery, dataParams);
-
-
-
-
-
-    /* ---------- TOTAL ROW COUNT (for pagination only) ---------- */
-    const countQuery = `
-    SELECT COUNT(*) AS total_rows
+  const siteQuery = `
+    SELECT site, SUM(sarus_coun) AS sarus_count
     FROM ${TABLE}
     ${where}
+    GROUP BY site
+    ORDER BY site
   `;
-  
-  const countResult = await pool.query(countQuery, filterParams);
-  
+  siteChart = (await pool.query(siteQuery, filterParams)).rows;
+}
 
 
+    /* ---------- BUILD COLUMN LIST SAFELY ---------- */
+
+const columns = [
+  "gid",
+  "latitude",
+  "longitude",
+  "habitat",
+  "sarus_coun AS sarus_count"
+];
+
+if (config.hasDistrict) columns.unshift("district");
+if (config.hasThreats) columns.push("threats");
+if (config.hasRangeFO) columns.push("range_fore");
+if (config.hasColony) columns.push("name_of_co");
+if (config.hasAdults) columns.push("adults");
+if (config.hasJuvenile) columns.push("juvenile");
+if (config.hasNests) columns.push("nests");
 
 
-    /* ---------- TOTAL SARUS ---------- */
+    let dataQuery = `
+      SELECT ${columns.join(", ")}
+      FROM ${TABLE}
+      ${where}
+      ORDER BY gid
+    `;
+
+    let dataParams = [...filterParams];
+
+    if (page && per_page)
+ {
+      dataQuery += `
+        LIMIT $${dataParams.length + 1}
+        OFFSET $${dataParams.length + 2}
+      `;
+      dataParams.push(per_page);
+      dataParams.push((page - 1) * per_page);
+    }
+
+    const rows = await pool.query(dataQuery, dataParams);
+
+    const countQuery = `
+      SELECT COUNT(*) AS total_rows
+      FROM ${TABLE}
+      ${where}
+    `;
+
+    const countResult = await pool.query(countQuery, filterParams);
 
     const totalQuery = `
       SELECT COALESCE(SUM(sarus_coun),0) AS sarus_count
@@ -251,110 +228,61 @@ const rows = await pool.query(dataQuery, dataParams);
 
     const total = await pool.query(totalQuery, filterParams);
 
-    /* ---------- DISTRICT CHART ---------- */
+    // -------- District Chart --------
+    let districtChart = [];
+// -------- HABITAT CHART (for Lucknow + others if needed) --------
+let habitatChart = [];
+let population = {};
 
-    /* ---------- DISTRICT CHART (All Districts View) ---------- */
+if (table === "sarus_lucknow_population") {
 
-let districtChart = [];
-let siteChart = [];
+  // Habitat chart
+  const habitatQuery = `
+    SELECT habitat, SUM(sarus_coun) AS sarus_count
+    FROM ${TABLE}
+    GROUP BY habitat
+    ORDER BY habitat
+  `;
 
-// When NO district selected → show district-wise chart
-if (!district && config.hasDistrict) {
-  const q = `
+  habitatChart = (await pool.query(habitatQuery)).rows;
+
+  // Adults / Juveniles / Nests totals
+  const popQuery = `
     SELECT 
-      CASE
-        WHEN LOWER(REPLACE(district,' ','')) 
-             IN ('raebareli','raibareli','raebarely')
-        THEN 'Raebareli'
-        ELSE district
-      END AS district,
-      SUM(sarus_coun) AS sarus_count
+      COALESCE(SUM(adults),0) AS adults,
+      COALESCE(SUM(juvenile),0) AS juvenile,
+      COALESCE(SUM(nests),0) AS nests
     FROM ${TABLE}
-    GROUP BY 
-      CASE
-        WHEN LOWER(REPLACE(district,' ','')) 
-             IN ('raebareli','raibareli','raebarely')
-        THEN 'Raebareli'
-        ELSE district
-      END
-    ORDER BY district
   `;
 
-  districtChart = (await pool.query(q)).rows;
+  population = (await pool.query(popQuery)).rows[0];
 }
 
-
-// When district selected → show site-wise chart
-if (district && config.hasSite) {
-
-  const districtStr = String(district).trim();   // 🔐 force string safely
-
-  let siteWhere = "";
-  let siteParams = [];
-
-  if (districtStr.toLowerCase() === "raebareli") {
-    siteWhere = `
-      WHERE LOWER(REPLACE(district,' ','')) 
-      IN ('raebareli','raibareli','raebarely')
-    `;
-  } else {
-    siteWhere = `WHERE LOWER(district) = LOWER($1)`;
-    siteParams.push(districtStr);
-  }
-
-  const q = `
-    SELECT site, SUM(sarus_coun) AS sarus_count
-    FROM ${TABLE}
-    ${siteWhere}
-    GROUP BY site
-    ORDER BY site
-  `;
-
-  siteChart = (await pool.query(q, siteParams)).rows;
-}
-
-
-
-    /* ---------- HABITAT CHART ---------- */
-
-    const habitatChart = (
-      await pool.query(`
-        SELECT habitat, SUM(sarus_coun) AS sarus_count
+    if (!district && config.hasDistrict) {
+      const q = `
+        SELECT district, SUM(sarus_coun) AS sarus_count
         FROM ${TABLE}
-        GROUP BY habitat
-      `)
-    ).rows;
+        GROUP BY district
+        ORDER BY district
+      `;
+      districtChart = (await pool.query(q)).rows;
+    }
 
-    /* ---------- POPULATION SUMMARY ---------- */
-
-    const popParts = [];
-    if (config.hasAdults) popParts.push("SUM(adults) AS adults");
-    if (config.hasJuvenile) popParts.push("SUM(juvenile) AS juvenile");
-    if (config.hasNests) popParts.push("SUM(nests) AS nests");
-
-    const population = popParts.length
-      ? (
-        await pool.query(`
-            SELECT ${popParts.join(", ")}
-            FROM ${TABLE}
-          `)
-      ).rows[0]
-      : {};
-
-    /* ---------- RESPONSE ---------- */
-
-    res.json({
-      rows: rows.rows,
-      totalRows: Number(countResult.rows[0].total_rows), // ← for pagination
-      total: Number(total.rows[0].sarus_count),          // ← for display
-      charts: {
-        district: districtChart,
-        site: siteChart,
-        habitat: habitatChart,
-        population
-      }
-    });
     
+    res.json({
+        rows: rows.rows || [],
+        totalRows: Number(countResult.rows[0]?.total_rows || 0),
+        total: Number(total.rows[0]?.sarus_count || 0),
+        charts: {
+            district: districtChart || [],
+            site: siteChart || [],
+            habitat: habitatChart || [],
+            population: population || {}
+          }
+          
+      });
+      
+      
     
 
   } catch (err) {
@@ -362,6 +290,7 @@ if (district && config.hasSite) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 /* ================= EXPORT SARUS ================= */
 
@@ -444,7 +373,7 @@ const parser = new Parser({
       // -------- TITLE --------
       const chartTitle = district
         ? `Sarus Count by Site for ${district}`
-        : "Sarus Count by Habitat";
+        : "Sarus Count by District";
 
       const reportDate = new Date().toLocaleDateString("en-IN", {
         day: "2-digit",
@@ -529,7 +458,7 @@ const parser = new Parser({
       const subTitle = ws.getCell("A5");
       const chartTitle = district
         ? `Sarus Count by Site for ${district}`
-        : "Sarus Count by Habitat";
+        : "Sarus Count by District";
 
       subTitle.value = `${chartTitle} `
       // (${new Date().toLocaleDateString("en-IN", {
@@ -625,8 +554,9 @@ if (table === "sarus_lucknow_population") {
   const compValues = [totalAdults, totalJuveniles, totalNests];
 
   // ---- Receive images from frontend ----
-  const habitatImage = req.body?.habitatChartImage;
-  const compositionImage = req.body?.compositionChartImage;
+  const habitatImage = req.body?.habitatChartImage || null;
+const compositionImage = req.body?.compositionChartImage || null;
+
 
   const lastRow = ws.lastRow.number + 2;
 
@@ -662,34 +592,26 @@ else {
 
   const barChartImage = req.body?.chartImage;
 
-  if (barChartImage && barChartImage.startsWith("data:image")) {
+if (barChartImage && barChartImage.startsWith("data:image")) {
 
-    try {
+  const barBuffer = Buffer.from(barChartImage.split(",")[1], "base64");
 
-      const barBuffer = Buffer.from(barChartImage.split(",")[1], "base64");
+  const imgId = wb.addImage({
+    buffer: barBuffer,
+    extension: "png"
+  });
 
-      const barImgId = wb.addImage({
-        buffer: barBuffer,
-        extension: "png"
-      });
+  const lastRow = ws.lastRow.number + 2;
 
-      const lastTableRow = ws.lastRow.number + 2;
-
-      // ---- BIG & CLEAR BAR CHART ----
-      ws.addImage(barImgId, {
-        tl: { col: 2, row: lastTableRow },
-        ext: {
-          width: 900,   // LARGE WIDTH
-          height: 700   // CLEAR HEIGHT
-        },
-        editAs: "oneCell"
-      });
-
-    } catch (err) {
-      console.error("Excel bar chart insert failed:", err.message);
+  ws.addImage(imgId, {
+    tl: { col: 0, row: lastRow },
+    ext: {
+      width: 900,
+      height: 500
     }
+  });
+}
 
-  }
 
 }
 
@@ -762,7 +684,7 @@ else {
 
           // ---- chart (compact) --------------------------------------------
           const chartW = 300;
-          const chartH = 240;
+          const chartH = 360;
           const chartX = 50;
           const chartY = y + 10;
           doc.image(chartBuffer, chartX, chartY, { width: chartW, height: chartH });
