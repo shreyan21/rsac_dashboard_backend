@@ -44,47 +44,35 @@ async function buildQueryOptions(tableKey) {
 
 // ✅ Query data for table
 async function queryData(table, district, page, perPage) {
+
   let sql = `SELECT * FROM ${table}`;
   const params = [];
 
   if (district) {
 
-    // Special handling ONLY for sarus_2_09_2020 Raebareli
     if (
       table === "uprsac_09xxxx_sarusfirst_13072023" &&
-      String(district).toLowerCase()
- === "raebareli"
+      String(district).toLowerCase() === "raebareli"
     ) {
-  
       sql += `
-        WHERE LOWER(REPLACE(district,' ','')) IN ('raebareli','raibareli','raebarely')
-        AND LOWER(site) IN ('na','n/a')
+        WHERE LOWER(REPLACE(district,' ','')) 
+        IN ('raebareli','raibareli','raebarely')
       `;
-  
     }
-  
-    // Normal Raebareli merge for other sarus tables
-    else if (String(district).toLowerCase()
- === "raebareli") {
-  
+
+    else if (String(district).toLowerCase() === "raebareli") {
       sql += `
-        WHERE LOWER(REPLACE(district,' ','')) IN ('raebareli','raibareli','raebarely')
+        WHERE LOWER(REPLACE(district,' ','')) 
+        IN ('raebareli','raibareli','raebarely')
       `;
-  
     }
-  
-    // Normal districts
+
     else {
-  
       params.push(district);
       sql += ` WHERE district = $${params.length}`;
-  
     }
   }
-  
-  
 
-  // ✅ Apply pagination only if page & perPage exist
   if (page && perPage) {
     params.push(perPage);
     sql += ` LIMIT $${params.length}`;
@@ -96,6 +84,7 @@ async function queryData(table, district, page, perPage) {
   const result = await pool.query(sql, params);
   return result.rows;
 }
+
 
 
 router.get("/districts", async (req, res) => {
@@ -158,18 +147,7 @@ router.get("/report", async (req, res) => {
         filterParams.push(districtStr);
       }
     }
-    let siteChart = [];
-
-if (district && config.hasDistrict) {
-  const siteQuery = `
-    SELECT site, SUM(sarus_coun) AS sarus_count
-    FROM ${TABLE}
-    ${where}
-    GROUP BY site
-    ORDER BY site
-  `;
-  siteChart = (await pool.query(siteQuery, filterParams)).rows;
-}
+ 
 
 
     /* ---------- BUILD COLUMN LIST SAFELY ---------- */
@@ -258,15 +236,34 @@ if (table === "sarus_lucknow_population") {
   population = (await pool.query(popQuery)).rows[0];
 }
 
-    if (!district && config.hasDistrict) {
-      const q = `
-        SELECT district, SUM(sarus_coun) AS sarus_count
-        FROM ${TABLE}
-        GROUP BY district
-        ORDER BY district
-      `;
-      districtChart = (await pool.query(q)).rows;
-    }
+if (config.hasDistrict) {
+
+  if (!district) {
+    // Top 20 districts
+    const q = `
+      SELECT district, SUM(sarus_coun) AS sarus_count
+      FROM ${TABLE}
+      GROUP BY district
+      ORDER BY sarus_count DESC
+      LIMIT 20
+    `;
+    districtChart = (await pool.query(q)).rows;
+  }
+
+  else {
+    // If district selected → show habitat breakdown
+    const q = `
+      SELECT habitat AS district, SUM(sarus_coun) AS sarus_count
+      FROM ${TABLE}
+      ${where}
+      GROUP BY habitat
+      ORDER BY sarus_count DESC
+    `;
+    districtChart = (await pool.query(q, filterParams)).rows;
+  }
+
+}
+
 
     
     res.json({
@@ -275,7 +272,6 @@ if (table === "sarus_lucknow_population") {
         total: Number(total.rows[0]?.sarus_count || 0),
         charts: {
             district: districtChart || [],
-            site: siteChart || [],
             habitat: habitatChart || [],
             population: population || {}
           }
@@ -324,11 +320,8 @@ router.all("/export", async (req, res) => {
     
         if (key === "gid") return;
     
-        if (key === "time") {
-         const dateValue = new Date(r[key]);
-obj.DATE = dateValue.toLocaleDateString("en-GB");
-
-        }
+        if (key === "site") return;  
+        
         else if (key === "sarus_coun") {
           obj["SARUS COUNT"] = r[key];
         }
@@ -372,7 +365,7 @@ const parser = new Parser({
 
       // -------- TITLE --------
       const chartTitle = district
-        ? `Sarus Count by Site for ${district}`
+        ? `Sarus Count for ${district}`
         : "Sarus Count by District";
 
       const reportDate = new Date().toLocaleDateString("en-IN", {
@@ -380,6 +373,7 @@ const parser = new Parser({
         month: "2-digit",
         year: "numeric"
       });
+   
 
       // -------- TOTAL SARUS COUNT --------
       const totalSarus = transformedRows.reduce(
@@ -468,7 +462,7 @@ const parser = new Parser({
       // })})`;
 
       subTitle.font = { size: 13, bold: true };
-      subTitle.alignment = { horizontal: "center" };
+    
 
       // --- Start of table ---
       const headers = ["SNo", ...Object.keys(transformedRows[0]).filter(h => h !== "SNo")];
@@ -558,7 +552,7 @@ if (table === "sarus_lucknow_population") {
 const compositionImage = req.body?.compositionChartImage || null;
 
 
-  const lastRow = ws.lastRow.number + 2;
+const lastRow = ws.lastRow.number + 4;
 
   if (habitatImage && compositionImage) {
 
@@ -606,10 +600,21 @@ if (barChartImage && barChartImage.startsWith("data:image")) {
   ws.addImage(imgId, {
     tl: { col: 0, row: lastRow },
     ext: {
-      width: 900,
-      height: 500
+      width: 750,
+      height: 380
     }
   });
+  const showingRow = lastRow + 28;
+
+ws.mergeCells(`A${showingRow}:H${showingRow}`);
+const showCell = ws.getCell(`A${showingRow}`);
+showCell.value = district
+  ? `Showing data for ${district}`
+  : `Showing Top 20 of 75 districts`;
+
+showCell.font = { size: 11, italic: true };
+showCell.alignment = { horizontal: "center" };
+
 }
 
 
@@ -619,9 +624,15 @@ if (barChartImage && barChartImage.startsWith("data:image")) {
 
 
       // Footer
-      const footerRow = ws.addRow([]);
-      footerRow.getCell(1).value = "Generated by RSAC UP";
-      footerRow.font = { italic: true, color: { argb: "777777" } };
+      const footerStartRow = ws.lastRow.number + 35;
+
+      ws.mergeCells(`A${footerStartRow}:H${footerStartRow}`);
+      
+      const footerCell = ws.getCell(`A${footerStartRow}`);
+      footerCell.value = "Generated by RSAC UP";
+      footerCell.font = { italic: true, color: { argb: "777777" } };
+      footerCell.alignment = { horizontal: "center" };
+      
 
       // Output response
       ws.views = [{ state: "frozen", ySplit: 6 }];
@@ -660,6 +671,16 @@ if (barChartImage && barChartImage.startsWith("data:image")) {
         doc.image(wmBuffer, wmX, wmY, { width: wmW, height: wmH });
         doc.restore();
       }
+      const totalSarus = transformedRows.reduce(
+        (sum, r) => sum + (parseInt(r["SARUS COUNT"]) || 0),
+        0
+      );
+      
+      const formattedTitle = table
+  .replace("sarus_", "")
+  .replace(/_/g, " ")
+  .toUpperCase();
+
 
       // ---- header (logo + title) -------------------------------------------
       const logoPath = path.join(__dirname, "../public/logo.jpg");
@@ -671,9 +692,22 @@ if (barChartImage && barChartImage.startsWith("data:image")) {
         .text("Remote Sensing Applications Centre", 95, 35);
       doc.fontSize(12).fillColor("#003366")
         .text("Lucknow, Uttar Pradesh", 95, 55);
-      doc.moveDown()
-        .fontSize(14).fillColor("#000")
-        .text(`Sarus Crane Report (${new Date().toLocaleDateString()})`, { align: "center" });
+        doc.fontSize(18)
+   .fillColor("#003366")
+   .text(`Sarus Census for ${formattedTitle}`, {
+     align: "center"
+   });
+
+      
+      doc.moveDown(0.5);
+      
+      doc.fontSize(14).fillColor("#000")
+        .text(`TOTAL SARUS COUNT : ${totalSarus}`, {
+          align: "center"
+        });
+      
+        // .text(`Sarus Crane Report (${new Date().toLocaleDateString()})`, { align: "center" });
+        
 
       let y = 130;   // start of chart area
 
@@ -734,9 +768,10 @@ if (barChartImage && barChartImage.startsWith("data:image")) {
           });
 
           // chart caption (centered under pie)
-          const caption = districtFilter?.value
-            ? `Sarus Count by Habitat`
-            : "Sarus Count by District";
+          const caption = district
+          ? `Sarus Count for ${district}`
+          : "Sarus Count by District";
+        
           doc.fontSize(10).fillColor("#555")
             .text(caption, chartX, chartY + chartH + 8,
               { align: "center", width: chartW });

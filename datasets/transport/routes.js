@@ -202,7 +202,7 @@ router.get("/export", async (req, res) => {
 
     /* ================= HEADER ================= */
 
-    const logoPath = path.join(process.cwd(), "public/images/logo.jpg");
+    const logoPath = path.join(process.cwd(), "../public/images/logo.jpg");
 
     if (fs.existsSync(logoPath)) {
       doc.image(logoPath, 40, 30, { width: 55 });
