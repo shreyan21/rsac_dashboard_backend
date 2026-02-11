@@ -185,6 +185,8 @@ if (district && config.hasDistrict) {
     if (config.hasDistrict) columns.unshift("district");
 
     if (config.hasSite) columns.push("site");
+    if (config.hasThreats) columns.push("threats");
+
 
     if (config.hasRangeFO) columns.push("range_fore");
 

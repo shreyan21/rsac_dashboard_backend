@@ -1,6 +1,7 @@
 const SCHEMA = {
     sarus_2_09_2020: {
       hasDistrict: true,
+      hasThreats:true,
       hasSite: true,
       hasAdults: true,
       hasJuvenile: true,
@@ -10,6 +11,7 @@ const SCHEMA = {
     sarus_21_01_2021: {
       hasDistrict: true,
       hasSite: true,
+      hasThreats:true,
       hasAdults: true,
       hasJuvenile: true,
       hasNests: true
@@ -18,6 +20,7 @@ const SCHEMA = {
     sarus_27_09_2021: {
       hasDistrict: true,
       hasSite: true,
+      hasThreats:true,
       hasAdults: false,   // IMPORTANT
       hasJuvenile: true,
       hasNests: true
