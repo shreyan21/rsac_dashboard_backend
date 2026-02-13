@@ -4,9 +4,6 @@ import sarusMap from "./tableMap.js";
 import SCHEMA from "./schema.js";
 
 import { Parser } from "json2csv";
-import PDFDocument from "pdfkit";
-import ExcelJS from "exceljs";
-import { ChartJSNodeCanvas } from "chartjs-node-canvas";
 
 import path from "path"
 import url from "url"
@@ -23,26 +20,7 @@ async function getExistingColumns(tableName, columns) {
   return columns.filter((c) => existing.includes(c.toLowerCase()));
 }
 
-// ✅ Build columns & table based on selection
-async function buildQueryOptions(tableKey) {
-  const TABLE = sarusMap[tableKey];
-  if (!TABLE) throw new Error("Invalid table name");
 
-  const isLucknow = TABLE === sarusMap["sarus_lucknow_population"];
-  const isThird = TABLE === sarusMap["sarus_27_09_2021"];
-
-  let cols = [];
-  if (!isLucknow) cols.push("district");
-  cols.push("latitude", "longitude");
-  if (!isLucknow) cols.push("pollution");
-  cols.push("sarus_coun");
-  if (!isThird) cols.push("adults");
-  else cols.push("adult AS adults");
-  cols.push("juvenile", "nests", "habitat", "threats", "time");
-
-  cols = await getExistingColumns(TABLE, cols);
-  return { TABLE, cols, isLucknow };
-}
 
 // ✅ Query data for table
 async function queryData(table, district, page, perPage) {
@@ -303,8 +281,16 @@ router.all("/export", async (req, res) => {
   }
 
   try {
-    const { format = "csv", table, district = "", page = 1, per_page = 100, chartImage } =
-      req.method === "POST" ? req.body : req.query;
+  const {
+  format = "csv",
+  table,
+  district = "",
+  page = 1,
+  per_page = 100,
+  chartImage,
+  habitatChartImage,
+  compositionChartImage
+} = req.method === "POST" ? req.body : req.query;
 
     if (!table) return res.status(400).send("table parameter required");
 
@@ -524,8 +510,9 @@ router.all("/export", async (req, res) => {
 
 
         // ---- Receive images from frontend ----
-        const habitatImage = req.body?.habitatChartImage || null;
-        const compositionImage = req.body?.compositionChartImage || null;
+       const habitatImage = habitatChartImage || null;
+const compositionImage = compositionChartImage || null;
+
 
 
         const lastRow = ws.lastRow.number + 4;
@@ -544,13 +531,13 @@ router.all("/export", async (req, res) => {
 
           // ---- Place charts side-by-side ----
           ws.addImage(img1, {
-            tl: { col: 0, row: lastRow },
-            ext: { width: 450, height: 230 }
+            tl: { col: 1, row: lastRow },
+            ext: { width: 450, height: 350 }
           });
 
           ws.addImage(img2, {
             tl: { col: 3, row: lastRow },
-            ext: { width: 450, height: 230 }
+            ext: { width: 450, height: 350 }
           });
 
         }
@@ -598,37 +585,7 @@ router.all("/export", async (req, res) => {
 
 
 
-      // ===== PIE CHARTS AFTER TABLE =====
-      if (table === "sarus_lucknow_population") {
-
-        const habitatImage = req.body?.habitatChartImage || null;
-        const compositionImage = req.body?.compositionChartImage || null;
-
-        const chartStartRow = ws.lastRow.number + 3;
-
-        if (habitatImage && compositionImage) {
-
-          const img1 = wb.addImage({
-            buffer: Buffer.from(habitatImage.split(",")[1], "base64"),
-            extension: "png"
-          });
-
-          const img2 = wb.addImage({
-            buffer: Buffer.from(compositionImage.split(",")[1], "base64"),
-            extension: "png"
-          });
-
-          ws.addImage(img1, {
-            tl: { col: 0, row: chartStartRow },
-            ext: { width: 350, height: 220 }
-          });
-
-          ws.addImage(img2, {
-            tl: { col: 4, row: chartStartRow },
-            ext: { width: 350, height: 220 }
-          });
-        }
-      }
+   
 
       // Footer
       const footerStartRow = ws.lastRow.number + 35;
