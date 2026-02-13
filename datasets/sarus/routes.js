@@ -5,6 +5,9 @@ import SCHEMA from "./schema.js";
 
 import { Parser } from "json2csv";
 import PDFDocument from "pdfkit";
+import ExcelJS from "exceljs";
+import { ChartJSNodeCanvas } from "chartjs-node-canvas";
+
 import path from "path"
 import url from "url"
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
