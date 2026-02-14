@@ -5,27 +5,40 @@ import SCHEMA from "./schema.js";
 
 import { Parser } from "json2csv";
 
-import path from "path"
-import url from "url"
-const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 
 const router = Router();
 
-/* ================= DISTRICT DROPDOWN ================= */
-async function getExistingColumns(tableName, columns) {
-  const q = `SELECT column_name FROM information_schema.columns WHERE table_name = $1`;
-  const res = await pool.query(q, [tableName]);
-  const existing = res.rows.map((r) => r.column_name.toLowerCase());
-  return columns.filter((c) => existing.includes(c.toLowerCase()));
+
+function getSafeColumns(tableKey) {
+  const config = SCHEMA[tableKey];
+
+  const cols = [
+    "latitude",
+    "longitude",
+    "habitat",
+    "sarus_coun"
+  ];
+
+  if (config?.hasDistrict) cols.unshift("district");
+  if (config?.hasRangeFO) cols.push("range_fore");
+  if (config?.hasColony) cols.push("name_of_co");
+  if (config?.hasAdults) cols.push("adults");
+  if (config?.hasJuvenile) cols.push("juvenile");
+  if (config?.hasNests) cols.push("nests");
+
+  return cols.join(", ");
 }
-
-
 
 // ✅ Query data for table
 async function queryData(table, district, page, perPage) {
 
-  let sql = `SELECT * FROM ${table}`;
+ 
+
+const safeColumns = getSafeColumns(
+  Object.keys(sarusMap).find(k => sarusMap[k] === table)
+);
+  let sql=`SELECT ${safeColumns} FROM ${table}`;
   const params = [];
 
   if (district) {
@@ -318,7 +331,8 @@ router.all("/export", async (req, res) => {
         if (key === "gid") return;
 
         if (key === "site") return;
-
+        if(key==="time") return;
+        if(key==="geom") return;
         else if (key === "sarus_coun") {
           obj["SARUS COUNT"] = r[key];
         }
@@ -573,7 +587,7 @@ const compositionImage = compositionChartImage || null;
           const showCell = ws.getCell(`A${showingRow}`);
           showCell.value = district
             ? `Showing data for ${district}`
-            : `Showing Top 20 of 75 districts`;
+            : `Showing Top  districts`;
 
           showCell.font = { size: 11, italic: true };
           showCell.alignment = { horizontal: "center" };
