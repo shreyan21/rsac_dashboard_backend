@@ -344,128 +344,108 @@ function drawTable(doc, headers, rows) {
 /* ---------------- TRANSPORT PDF EXPORT ---------------- */
 
 
-  router.get("/export", async (req, res) => {
-    try {
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader(
-        "Content-Disposition",
-        "attachment; filename=RSAC_Transport_Report.pdf"
-      );
+  // router.get("/export", async (req, res) => {
+  //   try {
+  //     res.setHeader("Content-Type", "application/pdf");
+  //     res.setHeader(
+  //       "Content-Disposition",
+  //       "attachment; filename=RSAC_Transport_Report.pdf"
+  //     );
   
-      const doc = new PDFDocument({
-        size: "A4",
-        layout: "portrait",
-        margin: 50
-      });
+  //     const doc = new PDFDocument({
+  //       size: "A4",
+  //       layout: "portrait",
+  //       margin: 50
+  //     });
   
-      doc.pipe(res);
+  //     doc.pipe(res);
   
-      const data = await buildDashboardData();
+  //     const data = await buildDashboardData();
   
-      /* ---------------- HEADER ---------------- */
+     
   
-      const logoPath = path.join(__dirname, "../../public/logo.jpg");
-      if (fs.existsSync(logoPath)) {
-        doc.image(logoPath, 50, 40, { width: 50 });
-      }
+  //     doc.moveDown(2);
   
-      doc
-        .fontSize(16)
-        .font("Helvetica-Bold")
-        .text(
-          "Remote Sensing Applications Centre, Uttar Pradesh",
-          0,
-          45,
-          { align: "center" }
-        );
+  //     /* ================================
+  //        SECTION 1 — 2010–2018 ANALYTICS
+  //        ================================ */
   
-      doc
-        .fontSize(12)
-        .font("Helvetica")
-        .text("Transport Dataset Summary", { align: "center" });
+  //     doc
+  //       .fontSize(13)
+  //       .font("Helvetica-Bold")
+  //       .fillColor("#003366")
+  //       .text("2010–2018 Analytics");
   
-      doc.moveDown(2);
+  //     doc.moveDown(0.8);
   
-      /* ================================
-         SECTION 1 — 2010–2018 ANALYTICS
-         ================================ */
+  //     const analyticsRows = [
+  //       ["National Highways", data.analytics.nh.y2010, data.analytics.nh.y2018],
+  //       ["State Highways", data.analytics.sh.y2010, data.analytics.sh.y2018],
+  //       ["Other Roads", data.analytics.other.y2010, data.analytics.other.y2018],
+  //       ["Railway Networks", data.analytics.rail.y2010, data.analytics.rail.y2018]
+  //     ];
   
-      doc
-        .fontSize(13)
-        .font("Helvetica-Bold")
-        .fillColor("#003366")
-        .text("2010–2018 Analytics");
+  //     drawTable(doc, ["Category", "2010 (km)", "2018 (km)"], analyticsRows);
   
-      doc.moveDown(0.8);
+  //     doc.moveDown(2);
   
-      const analyticsRows = [
-        ["National Highways", data.analytics.nh.y2010, data.analytics.nh.y2018],
-        ["State Highways", data.analytics.sh.y2010, data.analytics.sh.y2018],
-        ["Other Roads", data.analytics.other.y2010, data.analytics.other.y2018],
-        ["Railway Networks", data.analytics.rail.y2010, data.analytics.rail.y2018]
-      ];
+  //     /* ================================
+  //        SECTION 2 — 2018 LAYERS
+  //        ================================ */
   
-      drawTable(doc, ["Category", "2010 (km)", "2018 (km)"], analyticsRows);
+  //     doc
+  //       .fontSize(13)
+  //       .font("Helvetica-Bold")
+  //       .fillColor("#003366")
+  //       .text("2018 Layers");
   
-      doc.moveDown(2);
+  //     doc.moveDown(0.8);
   
-      /* ================================
-         SECTION 2 — 2018 LAYERS
-         ================================ */
+  //     const layersRows = [
+  //       [
+  //         "Expressways",
+  //         Number(data.expressways.existing.count) +
+  //           Number(data.expressways.upcoming.count),
+  //         Math.round(
+  //           Number(data.expressways.existing.sum) +
+  //             Number(data.expressways.upcoming.sum)
+  //         )
+  //       ],
+  //       [
+  //         "Ganga Cruise Route",
+  //         Math.round(data.ganga.sum),
+  //         1289
+  //       ],
+  //       [
+  //         "UP Roadways Routes",
+  //         data.roadways.count,
+  //         Math.round(data.roadways.max)
+  //       ],
+  //       [
+  //         "UP RTA Routes",
+  //         data.rta.count,
+  //         Math.round(data.rta.max)
+  //       ]
+  //     ];
   
-      doc
-        .fontSize(13)
-        .font("Helvetica-Bold")
-        .fillColor("#003366")
-        .text("2018 Layers");
+  //     drawTable(doc, ["Layer", "Primary Value", "Secondary Value"], layersRows);
   
-      doc.moveDown(0.8);
+  //     doc.moveDown(2);
   
-      const layersRows = [
-        [
-          "Expressways",
-          Number(data.expressways.existing.count) +
-            Number(data.expressways.upcoming.count),
-          Math.round(
-            Number(data.expressways.existing.sum) +
-              Number(data.expressways.upcoming.sum)
-          )
-        ],
-        [
-          "Ganga Cruise Route",
-          Math.round(data.ganga.sum),
-          1289
-        ],
-        [
-          "UP Roadways Routes",
-          data.roadways.count,
-          Math.round(data.roadways.max)
-        ],
-        [
-          "UP RTA Routes",
-          data.rta.count,
-          Math.round(data.rta.max)
-        ]
-      ];
+  //     doc
+  //       .fontSize(9)
+  //       .fillColor("#666")
+  //       .text(
+  //         `Generated by RSAC UP | ${new Date().toLocaleDateString("en-IN")}`,
+  //         { align: "center" }
+  //       );
   
-      drawTable(doc, ["Layer", "Primary Value", "Secondary Value"], layersRows);
-  
-      doc.moveDown(2);
-  
-      doc
-        .fontSize(9)
-        .fillColor("#666")
-        .text(
-          `Generated by RSAC UP | ${new Date().toLocaleDateString("en-IN")}`,
-          { align: "center" }
-        );
-  
-      doc.end();
-    } catch (err) {
-      console.error(err);
-      res.status(500).send("PDF generation failed");
-    }
-  });
+  //     doc.end();
+  //   } catch (err) {
+  //     console.error(err);
+  //     res.status(500).send("PDF generation failed");
+  //   }
+  // });
   
   
 
