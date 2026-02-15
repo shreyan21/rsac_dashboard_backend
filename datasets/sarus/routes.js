@@ -33,12 +33,12 @@ function getSafeColumns(tableKey) {
 // ✅ Query data for table
 async function queryData(table, district, page, perPage) {
 
- 
 
-const safeColumns = getSafeColumns(
-  Object.keys(sarusMap).find(k => sarusMap[k] === table)
-);
-  let sql=`SELECT ${safeColumns} FROM ${table}`;
+
+  const safeColumns = getSafeColumns(
+    Object.keys(sarusMap).find(k => sarusMap[k] === table)
+  );
+  let sql = `SELECT ${safeColumns} FROM ${table}`;
   const params = [];
 
   if (district) {
@@ -294,16 +294,16 @@ router.all("/export", async (req, res) => {
   }
 
   try {
-  const {
-  format = "csv",
-  table,
-  district = "",
-  page = 1,
-  per_page = 100,
-  chartImage,
-  habitatChartImage,
-  compositionChartImage
-} = req.method === "POST" ? req.body : req.query;
+    const {
+      format = "csv",
+      table,
+      district = "",
+      page = 1,
+      per_page = 100,
+      chartImage,
+      habitatChartImage,
+      compositionChartImage
+    } = req.method === "POST" ? req.body : req.query;
 
     if (!table) return res.status(400).send("table parameter required");
 
@@ -331,8 +331,8 @@ router.all("/export", async (req, res) => {
         if (key === "gid") return;
 
         if (key === "site") return;
-        if(key==="time") return;
-        if(key==="geom") return;
+        if (key === "time") return;
+        if (key === "geom") return;
         else if (key === "sarus_coun") {
           obj["SARUS COUNT"] = r[key];
         }
@@ -366,7 +366,7 @@ router.all("/export", async (req, res) => {
       (sum, r) => sum + (parseInt(r["SARUS COUNT"]) || 0),
       0
     );
-    
+
     // CSV                
     if (format === "csv") {
 
@@ -524,12 +524,11 @@ router.all("/export", async (req, res) => {
 
 
         // ---- Receive images from frontend ----
-       const habitatImage = habitatChartImage || null;
-const compositionImage = compositionChartImage || null;
+        const habitatImage = habitatChartImage || null;
+        const compositionImage = compositionChartImage || null;
 
 
 
-        const lastRow = ws.lastRow.number + 4;
 
         if (habitatImage && compositionImage) {
 
@@ -543,18 +542,36 @@ const compositionImage = compositionChartImage || null;
             extension: "png"
           });
 
-          // ---- Place charts side-by-side ----
+          // ---- Place Habitat Chart ----
+          const lastRow = ws.lastRow.number + 4;
+
+          // Add Habitat Pie
           ws.addImage(img1, {
             tl: { col: 1, row: lastRow },
             ext: { width: 450, height: 350 }
           });
 
+          // Add Composition Pie
           ws.addImage(img2, {
             tl: { col: 3, row: lastRow },
             ext: { width: 450, height: 350 }
           });
 
+          // 👇 Calculate title row (image height ~23 rows)
+          const titleRow = lastRow + 25;
+
+          // Add title below habitat chart
+          // ws.getCell(`B${titleRow}`).value = "Sarus Count by Habitat";
+          // ws.getCell(`B${titleRow}`).font = { bold: true };
+          // ws.getCell(`B${titleRow}`).alignment = { horizontal: "center" };
+
+          // // Add title below composition chart
+          // ws.getCell(`G${titleRow}`).value = "Total Adults, Juveniles and Nests";
+          // ws.getCell(`G${titleRow}`).font = { bold: true };
+          // ws.getCell(`G${titleRow}`).alignment = { horizontal: "left" };
+
         }
+
       }
 
       else {
@@ -599,7 +616,7 @@ const compositionImage = compositionChartImage || null;
 
 
 
-   
+
 
       // Footer
       const footerStartRow = ws.lastRow.number + 35;
@@ -637,13 +654,13 @@ const compositionImage = compositionChartImage || null;
         rows: transformedRows,
         totalSarus,
         reportTitle
-    });
+      });
 
 
 
       // ---- header (logo + title) -------------------------------------------
 
-     
+
     }
   } catch (err) {
     console.error("Export error:", err);
