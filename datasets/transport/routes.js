@@ -1,15 +1,12 @@
-import PDFDocument from "pdfkit";
 import { Router } from "express";
 import { pool } from "../../core/db.js";
 import path from "path";
-import fs from "fs"
 
 import { fileURLToPath } from 'url';
 
 // Recreate __filename and __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-import axios from "axios"
 import tableMap from './tableMap.js'
 
 function resolveTable(friendlyKey) {
