@@ -1,7 +1,7 @@
 const SCHEMA = {
     sarus_2_09_2020: {
       hasDistrict: true,
-      hasThreats:true,
+      hasThreats:false,
       hasSite: true,
       hasAdults: true,
       hasJuvenile: true,
