@@ -1,0 +1,26 @@
+name: My project
+on:
+    push:
+        branches: [master]
+
+jobs:
+  build:
+      runs-on: ubuntu-latest
+
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v2
+
+        - name: Install dependencies
+          uses: actions/setup-node@v4
+          with:
+            node-version: '18'
+
+        - name: Install npm packages
+          run: npm install
+
+        - name: Creating docker image
+          run:
+            docker build -t my-app:latest . 
+            echo "Image created successfully"
+          
