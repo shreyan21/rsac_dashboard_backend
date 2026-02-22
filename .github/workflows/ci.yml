@@ -19,8 +19,15 @@ jobs:
         - name: Install npm packages
           run: npm install
 
-        - name: Creating docker image
-          run:
-            docker build -t my-app:latest . 
-            echo "Image created successfully"
-          
+        - name: Setup docker buildx
+          uses: docker/setup-buildx-action@v3
+
+        - name: Create docker image
+          uses: docker/build-push-action@v3
+          with:
+            context: .
+            tags: express-img:latest
+            
+
+
+        
